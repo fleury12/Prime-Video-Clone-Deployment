@@ -2,6 +2,10 @@
 
 ![Prime Clone Deployment](https://github.com/user-attachments/assets/7ad59495-e514-44bd-a03c-1cb29edca2c4)
 
+## Project flow
+<div align="center">
+  <img src="./assets/devsecop-prime-video.png" alt="Logo" width="100%" height="100%">
+</div>
 
 ##  **Step 1: Launch EC2 (Ubuntu 24.04):**
 
@@ -310,7 +314,7 @@ pipeline {
                 </body>
                 </html>
             """,
-            to: 'angekoffi160@gmail.com',
+            to: 'your email',
             mimeType: 'text/html',
             attachmentsPattern: 'trivy.txt'
         }
