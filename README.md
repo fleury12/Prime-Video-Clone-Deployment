@@ -2,15 +2,41 @@
 
 ![Prime Clone Deployment](https://github.com/user-attachments/assets/7ad59495-e514-44bd-a03c-1cb29edca2c4)
 
-# **Install AWS CLI**
-```
+
+##  **Step 1: Launch EC2 (Ubuntu 24.04):**
+
+- Provision an EC2 instance on AWS with Ubuntu 24.04
+    Use T3.large this machine wll host jenkins and sonarqube. These tools require a minimal CUP 
+    In security group section, select HTTPS (allow jenkins to get acces to our dokcerhub) and http
+    Add 25 GB for the disk 
+    Create an Elastic Ip and attach it to your EC2 instance. The Ec2 will have an static ip address even if you close you EC2 instance. 
+- Connect to the instance using SSH.
+
+- configure security group like following:
+
+<div align="center">
+  <img src="./assets/1.png" alt="Logo" width="70%" height="80%">
+</div>
+
+##  **Step 2: Clone the Code:**
+
+- Once your Instance is ready, Update all the packages and then clone the code.
+- Clone your application's code repository onto the EC2 instance:
+    
+    ```bash
+    git clone https://github.com/fleury12/Prime-Video-Clone-Deployment.git
+    ```
+
+
+##  **Install AWS CLI**
+``` 
 sudo apt install unzip -y
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
 sudo ./aws/install
 ```
  
-# **Install Jenkins on Ubuntu:**
+##  **Install Jenkins on Ubuntu:**
 
 ```
 #!/bin/bash
@@ -29,7 +55,7 @@ sudo systemctl status jenkins
 ```
 
 
-# **Install Docker on Ubuntu:**
+##  **Install Docker on Ubuntu:**
 ```
 # Add Docker's official GPG key:
 sudo apt-get update
@@ -50,7 +76,7 @@ newgrp docker
 sudo systemctl status docker
 ```
 
-# **Install Trivy on Ubuntu:**
+##  **Install Trivy on Ubuntu:**
 
 Reference Doc: https://aquasecurity.github.io/trivy/v0.55/getting-started/installation/
 ```
@@ -61,14 +87,132 @@ sudo apt-get update
 sudo apt-get install trivy
 ```
 
+##  **Install SonarQube **
+Sonarqube is a tool that helps to scan vulnerabilities on you code. On the contrary, trivy helps to scann file system,repository and images.
+    - Install SonarQube and Trivy on the EC2 instance to scan for vulnerabilities.
+        
+        sonarqube
+        ```
+        docker run -d --name sonar -p 9000:9000 sonarqube:lts-community
+        ```
+        
+        
+        To access: 
+        
+        publicIP:9000 (by default username & password is admin)
 
-# **Install Docker Scout:**
-```
-docker login       `Give Dockerhub credentials here`
-```
-```
-curl -sSfL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh | sh -s -- -b /usr/local/bin
-```
+        Before getting access, make sure to add this port in the security group of this instance. Go to AWS CLI -> EC2 instance -> secutity -> security group -> edit inbound rules . source 0.0.0.0/0 
+
+        you will be asked to change this password.
+
+## **Integrate SonarQube and Configure:**
+    - Configure SonarQube to analyze code for quality and security issues.
+        create a project manually ( name and key : amazon-prime  )
+
+## **Install Necessary Plugins in Jenkins:**
+
+Goto Manage Jenkins →Plugins → Available Plugins →
+
+Install below plugins
+
+1 Eclipse Temurin Installer (Install without restart)
+
+2 SonarQube Scanner (Install without restart)
+
+3 NodeJs Plugin (Install Without restart)
+
+4 Email Extension Plugin
+
+5 docker (all plugin starting by docker)
+
+## **Configure Java and Nodejs in Global Tool Configuration**
+
+Goto Manage Jenkins → Tools → Install JDK(17) and NodeJs(16)→ seclect install automatically 
+jdk-17.0.8.1+1 (name: sonar-scaner)
+NodesJs 16.20.0 (name: node16)
+Click on Apply and Save
+
+### SonarQube
+
+Jenkins pipeline will use sonarqube in our pipeline. Then he needs to get acces.
+Create the token
+Go to sonarqube Administrator -> Security -> Users -> Tokens (create a token)
+
+Conenct sonarqube and jenkins
+Goto Jenkins Dashboard → Manage Jenkins → Credentials → Add Secret Text. It should look like this
+
+After adding sonar token (name like sonar-token)
+
+Click on Apply and Save
+
+**The Configure System option** is used in Jenkins to configure different server
+we need to create  sonarqube server
+name: sonar-server
+add server URL : publicIp:9000
+select the authntication token 
+
+**Global Tool Configuration** is used to configure different tools that we install using Plugins
+
+We will install a sonar scanner in the tools.
+
+Create a Jenkins webhook
+Go to Sonarqube -> Administration -> Configure -> webhook -> add jenkins url :
+    ```
+    http://publicIp:8080/sonarqube-webhook
+    ```
+
+**Install Dependency-Check and Docker Tools in Jenkins**
+
+**Install Dependency-Check Plugin:**
+
+- Go to "Dashboard" in your Jenkins web interface.
+- Navigate to "Manage Jenkins" → "Manage Plugins."
+- Click on the "Available" tab and search for "OWASP Dependency-Check."
+- Check the checkbox for "OWASP Dependency-Check" and click on the "Install without restart" button.
+
+**Configure Dependency-Check Tool:**
+
+- After installing the Dependency-Check plugin, you need to configure the tool.
+- Go to "Dashboard" → "Manage Jenkins" → "Global Tool Configuration."
+- Find the section for "OWASP Dependency-Check."
+- Add the tool's name, e.g., "DP-Check."
+- Save your settings.
+***configure Dp-Check tools:**
+    name : Dp-Check
+    select install automatically
+    dependency-check 12.1.9
+
+**Install Docker Tools and Docker Plugins:**
+we will use docker to build our container and run it
+- Go to "Dashboard" in your Jenkins web interface.
+- Navigate to "Manage Jenkins" → "Manage Plugins."
+- Click on the "Available" tab and search for "Docker."
+- Check the following Docker-related plugins:
+  - Docker
+  - Docker Commons
+  - Docker Pipeline
+  - Docker API
+  - docker-build-step
+- Click on the "Install without restart" button to install these plugins.
+
+**Add DockerHub Credentials:**
+To allow jenkin to have acces to your dockerub accoutn, you need to set you dockerhub credential in jenkins
+- To securely handle DockerHub credentials in your Jenkins pipeline, follow these steps:
+  - Go to "Dashboard" → "Manage Jenkins" → "Manage Credentials."
+  - Click on "System" and then "Global credentials (unrestricted)."
+  - Click on "Add Credentials" on the left side.
+  - Choose "Secret text" as the kind of credentials.
+  - Enter your DockerHub credentials (Username and Password) and give the credentials an ID (e.g., "docker").
+  - Click "OK" to save your DockerHub credentials.
+
+***configure docker tools:**
+    name : name
+    select install automatically
+    lates version 
+
+Now, you have installed the Dependency-Check plugin, configured the tool, and added Docker-related plugins along with your DockerHub credentials in Jenkins. You can now proceed with configuring your Jenkins pipeline to include these tools and credentials in your CI/CD process.
+
+
 # Deployment Stages:
 <img width="966" alt="Screenshot 2024-09-15 at 7 20 49 AM" src="https://github.com/user-attachments/assets/ddb5e618-79ab-49b3-8f13-b5114824eec3">
 
@@ -92,7 +236,7 @@ pipeline {
         }
         stage ("Git checkout") {
             steps {
-                git branch: 'main', url: 'https://github.com/yeshwanthlm/Prime-Video-Clone-Deployment.git'
+                git branch: 'main', url: 'https://github.com/fleury12/Prime-Video-Clone-Deployment.git'
             }
         }
         stage("Sonarqube Analysis "){
@@ -117,8 +261,8 @@ pipeline {
         }
         stage('OWASP FS SCAN') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+               dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+               dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
         stage ("Trivy File Scan") {
@@ -126,35 +270,24 @@ pipeline {
                 sh "trivy fs . > trivy.txt"
             }
         }
-        stage ("Build Docker Image") {
-            steps {
-                sh "docker build -t amazon-prime ."
-            }
-        }
         stage ("Tag & Push to DockerHub") {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag amazon-prime amonkincloud/amazon-prime:latest "
-                        sh "docker push amonkincloud/amazon-prime:latest "
+                    withDockerRegistry(credentialsId: 'docker-cred') {
+                        sh "docker tag amazon-prime fleury12/amazon-prime:latest "
+                        sh "docker push fleury12/amazon-prime:latest "
                     }
                 }
             }
         }
-        stage('Docker Scout Image') {
-            steps {
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh 'docker-scout quickview amonkincloud/amazon-prime:latest'
-                       sh 'docker-scout cves amonkincloud/amazon-prime:latest'
-                       sh 'docker-scout recommendations amonkincloud/amazon-prime:latest'
-                   }
-                }
+        stage('Image scaner') {
+            steps{
+                sh "trivy image fleury12/amazon-prime:latest > trivyimage.txt" 
             }
         }
         stage ("Deploy to Conatiner") {
             steps {
-                sh 'docker run -d --name amazon-prime -p 3000:3000 amonkincloud/amazon-prime:latest'
+                sh 'docker rm -f amazon-prime || true && docker run -d --name amazon-prime -p 3000:3000 amonkincloud/amazon-prime:latest'
             }
         }
     }
@@ -177,15 +310,26 @@ pipeline {
                 </body>
                 </html>
             """,
-            to: 'provide_your_Email_id_here',
+            to: 'angekoffi160@gmail.com',
             mimeType: 'text/html',
             attachmentsPattern: 'trivy.txt'
         }
     }
 }
 
+
 ```
+
+Your pipeline in jenkins
+    <div align="center">
+    <img src="./assets/3.png" alt="Logo" width="100%" height="100%">
+    </div>
+
 **Phase 4: Monitoring**
+**Create another EC2 instance:**
+T3.medium because prometheus requires 4 CPU and 20 gb
+Attach an Elastic IP to this instance
+Select the same security group used previously
 
 1. **Install Prometheus and Grafana:**
 
@@ -450,9 +594,94 @@ Open a web browser and navigate to Grafana using your server's IP address. The d
 
 `http://<your-server-ip>:3000`
 
+**Step 8: Change the Default Password:**
+
+When you log in for the first time, Grafana will prompt you to change the default password for security reasons. Follow the prompts to set a new password.
+
+**Step 9: Add Prometheus Data Source:**
+
+To visualize metrics, you need to add a data source. Follow these steps:
+
+- Click on the gear icon (⚙️) in the left sidebar to open the "Configuration" menu.
+
+- Select "Data Sources."
+
+- Click on the "Add data source" button.
+
+- Choose "Prometheus" as the data source type.
+
+- In the "HTTP" section:
+  - Set the "URL" to `http://localhost:9090` (assuming Prometheus is running on the same server).
+  - Click the "Save & Test" button to ensure the data source is working.
+
+**Step 10: Import a Dashboard:**
+
+To make it easier to view metrics, you can import a pre-configured dashboard. Follow these steps:
+
+- Click on the "+" (plus) icon in the left sidebar to open the "Create" menu.
+
+- Select "Dashboard."
+
+- Click on the "Import" dashboard option.
+
+- Enter the dashboard code you want to import (e.g., code 1860).
+
+- Click the "Load" button.
+
+- Select the data source you added (Prometheus) from the dropdown.
+
+- Click on the "Import" button.
+
+You should now have a Grafana dashboard set up to visualize metrics from Prometheus.
+
+Grafana is a powerful tool for creating visualizations and dashboards, and you can further customize it to suit your specific monitoring needs.
+
+That's it! You've successfully installed and set up Grafana to work with Prometheus for monitoring and visualization.
+
+Graphana dasboard for node-exporter
+<div align="center">
+  <img src="./assets/1.png" alt="Logo" width="70%" height="80%">
+</div>
+
+2. **Configure Prometheus Plugin Integration:**
+    - Integrate Jenkins with Prometheus to monitor the CI/CD pipeline.
+        install promotheus plugin in jenkis
+        go to system to set up the system (paht: prometheus)
+        click apply and save
+    - graphana dasboard for jenkins should be like this
+        <div align="center">
+        <img src="./assets/4.png" alt="Logo" width="70%" height="80%">
+        </div>
+
+3. **Implement Notification Services:**
+    - Set up email notifications in Jenkins or other notification mechanisms.
+        - create application password in google
+            got to security and search app password follow instruction
+        - create an credential in jenkins for you gmail account 
+            username: yourmail 
+            password: app code
+        - configure Extended E-mail Notification
+            SMTP server: smtp.gmail.com
+            SMTP port: 465
+            adnvanced: 
+                select creendential and use SSL
+            default content type: html
+        - configure E-mail Notification
+            SMTP server: smtp.gmail.com
+            adnvanced:
+                Use SMTP Auth and fill up creendential 
+                use SSL
+                smtp port 465
+            you can test configuration
+        click save and apply 
+    
 ## Monitor Kubernetes with Prometheus
 
 Prometheus is a powerful monitoring and alerting toolkit, and you'll use it to monitor your Kubernetes cluster. Additionally, you'll install the node exporter using Helm to collect metrics from your cluster nodes.
+
+# Phase 6: Kubernetes
+
+Follow this link : https://github.com/yeshwanthlm/Learn-AWS-EKS/blob/main/Day1.md
 
 ### Install Node Exporter using Helm
 
@@ -487,6 +716,7 @@ Update your Prometheus configuration (prometheus.yml) to add a new job for scrap
     static_configs:
       - targets: ['node1Ip:9100']
 ```
+ make sure to relaod prometheus and add ports 9100 & 30001 in security group of the node 
 
 Replace 'your-job-name' with a descriptive name for your job. The static_configs section specifies the targets to scrape metrics from, and in this case, it's set to nodeip:9001.
 
@@ -510,6 +740,9 @@ To deploy an application with ArgoCD, you can follow these steps, which I'll out
    - `project`: Specify the project the application belongs to.
    - `source`: Set the source of your application, including the GitHub repository URL, revision, and the path to the application within the repository.
    - `syncPolicy`: Configure the sync policy, including automatic syncing, pruning, and self-healing.
+ <div align="center">
+    <img src="./assets/2.png" alt="Logo" width="70%" height="80%">
+</div>
 
 4. **Access your Application**
    - To Access the app make sure port 30007 is open in your security group and then open a new tab paste your NodeIP:30007, your app should be running.
